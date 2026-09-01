@@ -16,6 +16,7 @@ Fields collected:
   - BRA_i             (Internt bruksareal - internal usable area, m²)
   - BRA_e             (Eksternt bruksareal - external usable area, m²)
   - byggeår           (Byggeår - year built, from the detail page "Nøkkelinfo" box)
+  - fellesgjeld       (Fellesgjeld - shared/collective debt tied to the unit, kr)
 
 Requirements:
     pip install requests beautifulsoup4
@@ -182,7 +183,7 @@ def scrape_ad_detail(ad_url):
     soup = get_soup(ad_url)
     text = soup.get_text(separator="\n", strip=True)
 
-    detail = {"rooms": None, "TBA": None, "BRA_i": None, "BRA_e": None, "byggeår": None}
+    detail = {"rooms": None, "TBA": None, "BRA_i": None, "BRA_e": None, "byggeår": None, "fellesgjeld": None}
 
     rom_match = re.search(r"Rom\n(\d+)", text)
     if rom_match:
@@ -192,6 +193,11 @@ def scrape_ad_detail(ad_url):
     year_match = re.search(r"Byggeår\n(\d{4})", text)
     if year_match:
         detail["byggeår"] = int(year_match.group(1))
+
+    # "Fellesgjeld\n229 815 kr" - shared debt allocated to this unit (co-ops/andel)
+    fellesgjeld_match = re.search(r"Fellesgjeld\n([\d\s]+)\s*kr", text)
+    if fellesgjeld_match:
+        detail["fellesgjeld"] = parse_number(fellesgjeld_match.group(1))
 
     # "Internt bruksareal\n73 m² (BRA-i)"
     bra_i_match = re.search(r"Internt bruksareal\n(\d+)\s*m", text)
@@ -222,7 +228,7 @@ def main():
             detail_data = scrape_ad_detail(ad_url)
         except Exception as e:
             print(f"  -> failed to fetch detail page: {e}")
-            detail_data = {"rooms": None, "TBA": None, "BRA_i": None, "BRA_e": None, "byggeår": None}
+            detail_data = {"rooms": None, "TBA": None, "BRA_i": None, "BRA_e": None, "byggeår": None, "fellesgjeld": None}
 
         row = {
             "url": ad_url,
@@ -237,6 +243,7 @@ def main():
             "BRA_i": detail_data.get("BRA_i"),
             "BRA_e": detail_data.get("BRA_e"),
             "byggeår": detail_data.get("byggeår"),
+            "fellesgjeld": detail_data.get("fellesgjeld"),
         }
         rows.append(row)
         time.sleep(random.uniform(*REQUEST_DELAY_RANGE))
