@@ -15,7 +15,7 @@ Fields collected:
   - TBA               (Bruksareal - total usable area, m²)
   - BRA_i             (Internt bruksareal - internal usable area, m²)
   - BRA_e             (Eksternt bruksareal - external usable area, m²)
-  - byggeår (year built) is not currently scraped, but could be added if needed.
+  - byggeår           (Byggeår - year built, from the detail page "Nøkkelinfo" box)
 
 Requirements:
     pip install requests beautifulsoup4
@@ -86,7 +86,7 @@ def get_ad_links(soup):
 def parse_search_card(card_text):
     """
     Given the visible text block for one listing card (as it reads top to bottom),
-    pull out address, m2, asking price, total price, bedrooms, ownership + type, byggeår.
+    pull out address, m2, asking price, total price, bedrooms, ownership + type.
 
     Finn card text typically looks like:
         Ulsholtveien 4C, Oslo
@@ -122,10 +122,6 @@ def parse_search_card(card_text):
         card_text,
     )
     data["apartment_type"] = type_match.group(1) if type_match else None
-
-    # Building year (byggeår)
-    year_match = re.search(r"Byggeår:\s*(\d{4})", card_text)
-    data["byggeår"] = int(year_match.group(1)) if year_match else None
 
     return data
 
@@ -186,11 +182,16 @@ def scrape_ad_detail(ad_url):
     soup = get_soup(ad_url)
     text = soup.get_text(separator="\n", strip=True)
 
-    detail = {"rooms": None, "TBA": None, "BRA_i": None, "BRA_e": None}
+    detail = {"rooms": None, "TBA": None, "BRA_i": None, "BRA_e": None, "byggeår": None}
 
     rom_match = re.search(r"Rom\n(\d+)", text)
     if rom_match:
         detail["rooms"] = int(rom_match.group(1))
+
+    # "Byggeår\n1973" - only present on the detail page's Nøkkelinfo box
+    year_match = re.search(r"Byggeår\n(\d{4})", text)
+    if year_match:
+        detail["byggeår"] = int(year_match.group(1))
 
     # "Internt bruksareal\n73 m² (BRA-i)"
     bra_i_match = re.search(r"Internt bruksareal\n(\d+)\s*m", text)
@@ -221,7 +222,7 @@ def main():
             detail_data = scrape_ad_detail(ad_url)
         except Exception as e:
             print(f"  -> failed to fetch detail page: {e}")
-            detail_data = {"rooms": None, "TBA": None, "BRA_i": None, "BRA_e": None}
+            detail_data = {"rooms": None, "TBA": None, "BRA_i": None, "BRA_e": None, "byggeår": None}
 
         row = {
             "url": ad_url,
@@ -235,12 +236,12 @@ def main():
             "TBA": detail_data.get("TBA"),
             "BRA_i": detail_data.get("BRA_i"),
             "BRA_e": detail_data.get("BRA_e"),
-            "byggeår": card_data.get("byggeår"),
+            "byggeår": detail_data.get("byggeår"),
         }
         rows.append(row)
         time.sleep(random.uniform(*REQUEST_DELAY_RANGE))
 
-    out_file = "finn_furuset_listings.csv"
+    out_file = "finn_raw.csv"
     with open(out_file, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=list(rows[0].keys()) if rows else [])
         writer.writeheader()
